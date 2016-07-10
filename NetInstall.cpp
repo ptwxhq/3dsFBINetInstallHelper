@@ -80,6 +80,17 @@ BOOL CNetInstall::Connect(LPCWSTR lpszAddr, WORD wPort/* = 5000*/)
 	return !connect(m_socket, (sockaddr *)&ser_addr, sizeof(sockaddr));
 }
 
+BOOL CNetInstall::StopConn()
+{
+	BOOL bRet = FALSE;
+	bRet = !shutdown(m_socket, SD_BOTH);
+	if (bRet)
+	{
+		DisConnect();
+	}
+	return bRet;
+}
+
 BOOL CNetInstall::SendData(LPBYTE lpData, DWORD dwLen)
 {
 	int res = 0;
@@ -201,7 +212,12 @@ BOOL CNetInstall::TransFile(const tagFileInfo* pInfo)
 					break;
 				}
 			}
-			m_sProgressCallBack(pInfo, pInfo->uFileSize - uLeftSize);
+
+			if (!m_sProgressCallBack(pInfo, pInfo->uFileSize - uLeftSize))
+			{
+				StopConn();
+				break;
+			}
 		}
 		delete [] pBuf;
 
@@ -241,7 +257,7 @@ BOOL CNetInstall::CheckFile(LPCWSTR lpszPath, tagFileInfo* pInfo)
 	return bRet;
 }
 
-BOOL CNetInstall::StartTask(const std::vector<tagFileInfo> *pVecInfo)
+void CNetInstall::StartTask(const std::vector<tagFileInfo> *pVecInfo)
 {
 	size_t nCount = pVecInfo->size();
 	size_t nRealCount = 0;
@@ -267,14 +283,15 @@ BOOL CNetInstall::StartTask(const std::vector<tagFileInfo> *pVecInfo)
 			UINT64 SendNetNum = htonll((*pVecInfo)[i].uFileSize);
 			if (SendData((LPBYTE)&SendNetNum, sizeof(SendNetNum)))
 			{
-				if (TransFile(&(*pVecInfo)[i]))
+				if (!TransFile(&(*pVecInfo)[i]))
 				{
-					continue;
+					break;
 				}
 
 			}
 			else
 			{
+				break;
 				//((*pVecInfo)[i]).dwError = 1;
 				//m_ProgressCallBack(i, &(*pVecInfo)[i], 0);
 				OutputDebugStringA("err fhapp");
@@ -286,8 +303,7 @@ BOOL CNetInstall::StartTask(const std::vector<tagFileInfo> *pVecInfo)
 		MessageBoxW(0, L"eeeerr", 0, 0);
 	}
 
-
-	return FALSE;
+	DisConnect();
 }
 
 CNetInstall::CNetInstall()

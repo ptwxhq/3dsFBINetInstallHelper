@@ -19,15 +19,15 @@ public:
 			dwError = 0;
 		}
 	};
-	typedef void(*UNITPROGRESS)(const tagFileInfo*, UINT64 uNowPos);
+	typedef int(*UNITPROGRESS)(const tagFileInfo*, UINT64 uNowPos);
 
 	BOOL SetBufferSize(DWORD dwSize);
 	static DWORD GetLocalIP();
 	BOOL Connect(LPCWSTR lpszAddr, WORD wPort = 5000);
-
+	BOOL StopConn();
 	BOOL DisConnect();
 	static BOOL CheckFile(LPCWSTR lpszPath, tagFileInfo* pInfo = NULL);
-	BOOL StartTask(const std::vector<tagFileInfo> *pVecInfo);
+	void StartTask(const std::vector<tagFileInfo> *pVecInfo);
 	BOOL TransFile(const tagFileInfo* pInfo);
 	
 	CNetInstall();
