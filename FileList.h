@@ -6,13 +6,24 @@ class CFileList :
 	public CListCtrl
 {
 public:
+	enum {
+		E_SELECT,
+		E_ID,
+		E_STATUS,
+		E_PROGRESS,
+		E_ELAPSE,
+		E_SPEED,
+		E_SIZE,
+		E_PATH,
+		E_END
+	};
 	struct ListData {
 		CStringW Stats;
 		CStringW Progress;
 	};
 	CFileList();
 	~CFileList();
-	void UpdateData(const CNetInstall::tagFileInfo *pinfo, ListData data);
+	void UpdateData(const CNetInstall::tagFileInfo *pinfo);
 	void AddFile(const CNetInstall::tagFileInfo *pinfo);
 	void GetFileLists(std::vector<CNetInstall::tagFileInfo> *pVecInfo);
 	DWORD GetCheckCount();

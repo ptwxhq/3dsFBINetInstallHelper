@@ -56,8 +56,9 @@ DWORD CNetInstall::GetLocalIP()
 	return dwIP;
 }
 
-BOOL CNetInstall::Connect(LPCWSTR lpszAddr, WORD wPort/* = 5000*/)
+BOOL CNetInstall::Connect(LPCWSTR lpszAddr, WORD wVerType /*= MAKEWORD(2, 0)*/, WORD wPort/* = 5000*/)
 {
+	m_wFBIVer = MAKEWORD(2, 0);
 	if (!m_bInited)
 	{
 		WSAData wd;
@@ -162,7 +163,7 @@ BOOL CNetInstall::DisConnect()
 	return TRUE;
 }
 
-BOOL CNetInstall::TransFile(const tagFileInfo* pInfo)
+BOOL CNetInstall::TransFile(tagFileInfo* pInfo)
 {
 	BOOL bRet = FALSE;
 	HANDLE hFile = CreateFileW(pInfo->strPath, FILE_GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
@@ -177,7 +178,8 @@ BOOL CNetInstall::TransFile(const tagFileInfo* pInfo)
 		{	
 			if (bSendErr)
 			{
-				if (SendData(pBuf, dwRead))
+				BOOL bSendRet = SendData(pBuf, dwRead);
+				if (bSendRet)
 				{
 					bSendErr = false;
 					uLeftSize -= dwRead;
@@ -185,6 +187,13 @@ BOOL CNetInstall::TransFile(const tagFileInfo* pInfo)
 				}
 				else
 				{
+					int we = WSAGetLastError();
+					if (WSAECONNRESET == we)
+					{
+						MessageBoxW(0, L"connect canceled on 3ds!", 0, 0);
+						break;
+					}
+
 					++iErrorCount;
 					if (iErrorCount > 3)
 					{
@@ -213,7 +222,8 @@ BOOL CNetInstall::TransFile(const tagFileInfo* pInfo)
 				}
 			}
 
-			if (!m_sProgressCallBack(pInfo, pInfo->uFileSize - uLeftSize))
+			pInfo->uSendSize = pInfo->uFileSize - uLeftSize;
+			if (!m_sProgressCallBack(pInfo, pInfo->uSendSize))
 			{
 				StopConn();
 				break;
@@ -257,29 +267,71 @@ BOOL CNetInstall::CheckFile(LPCWSTR lpszPath, tagFileInfo* pInfo)
 	return bRet;
 }
 
-void CNetInstall::StartTask(const std::vector<tagFileInfo> *pVecInfo)
+void CNetInstall::StartTask(std::vector<tagFileInfo> *pVecInfo)
 {
 	size_t nCount = pVecInfo->size();
-	size_t nRealCount = 0;
-	for (size_t i = 0; i < nCount; ++i)
+
+	if (m_wFBIVer == MAKEWORD(2, 0))
 	{
-		if ((*pVecInfo)[i].bSelected)
+		size_t nRealCount = 0;
+		for (size_t i = 0; i < nCount; ++i)
 		{
-			++nRealCount;
+			if ((*pVecInfo)[i].bSelected)
+			{
+				++nRealCount;
+			}
+		}
+		UINT32 nTs = htonl(nRealCount);
+		if (SendData((LPBYTE)&nTs, sizeof(nTs)))
+		{
+			UINT8 ack = 0;
+			RecvData(&ack, sizeof(ack));
+			bool bFailFlag = false;
+			for (size_t i = 0; i < nCount; ++i)
+			{
+				(*pVecInfo)[i].dwBeginTime = GetTickCount();
+				m_sProgressCallBack(&(*pVecInfo)[i], 0);
+				if (!(*pVecInfo)[i].bSelected)
+					continue;
+
+				UINT64 SendNetNum = htonll((*pVecInfo)[i].uFileSize);
+				if (SendData((LPBYTE)&SendNetNum, sizeof(SendNetNum)))
+				{
+					if (!TransFile(&(*pVecInfo)[i]))
+					{
+						bFailFlag = true;
+						((*pVecInfo)[i]).dwError = ERR_FAIL;
+						m_sProgressCallBack(&(*pVecInfo)[i], 0);
+					}
+
+				}
+				else
+				{
+					bFailFlag = true;
+					((*pVecInfo)[i]).dwError = ERR_FAIL;
+					m_sProgressCallBack(&(*pVecInfo)[i], 0);
+				}
+
+				if (bFailFlag)
+				{
+					(*pVecInfo)[i].bSelected = false;
+				}
+			}
+		}
+		else
+		{
+			MessageBoxW(0, L"eeeerr", 0, 0);
 		}
 	}
-
-	UINT32 nTs = htonl(nRealCount);
-	if (SendData((LPBYTE)&nTs, sizeof(nTs)))
+	else if (m_wFBIVer == MAKEWORD(1, 0))
 	{
-		UINT8 ack = 0;
-		RecvData(&ack, sizeof(ack));
+		//under construction
 		for (size_t i = 0; i < nCount; ++i)
 		{
 			m_sProgressCallBack(&(*pVecInfo)[i], 0);
-			if (!(*pVecInfo)[i].bSelected)		
+			if (!(*pVecInfo)[i].bSelected)
 				continue;
-				
+
 			UINT64 SendNetNum = htonll((*pVecInfo)[i].uFileSize);
 			if (SendData((LPBYTE)&SendNetNum, sizeof(SendNetNum)))
 			{
@@ -287,21 +339,20 @@ void CNetInstall::StartTask(const std::vector<tagFileInfo> *pVecInfo)
 				{
 					break;
 				}
-
+				
 			}
 			else
 			{
-				break;
-				//((*pVecInfo)[i]).dwError = 1;
-				//m_ProgressCallBack(i, &(*pVecInfo)[i], 0);
-				OutputDebugStringA("err fhapp");
+				((*pVecInfo)[i]).dwError = ERR_FAIL;
+				m_sProgressCallBack(&(*pVecInfo)[i], 0);
 			}
 		}
 	}
-	else
-	{
-		MessageBoxW(0, L"eeeerr", 0, 0);
-	}
+
+
+
+
+
 
 	DisConnect();
 }
@@ -311,6 +362,7 @@ CNetInstall::CNetInstall()
 	m_bInited = false;
 	m_socket = NULL;
 	m_dwBufferSize = 256 * 1024;
+	m_wFBIVer = MAKEWORD(2, 0);
 }
 
 

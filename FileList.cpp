@@ -12,16 +12,83 @@ CFileList::~CFileList()
 {
 }
 
-void CFileList::UpdateData(const CNetInstall::tagFileInfo *pinfo, ListData data)
+void CFileList::UpdateData(const CNetInstall::tagFileInfo *pinfo)
 {
-	if (!data.Stats.IsEmpty())
+	CStringW strStatus;
+	CStringW strProgress;
+	if (CNetInstall::ERR_FAIL == pinfo->dwError)
 	{
-		SetItemText(pinfo->dwItemID, 2, data.Stats);
+		strStatus = L"Failed";
 	}
-	if (!data.Progress.IsEmpty())
+	else if (pinfo->uSendSize == 0)
 	{
-		SetItemText(pinfo->dwItemID, 2, data.Progress);
+		if (pinfo->bSelected)
+		{
+			strStatus = L"Uploading";
+		}
+		else
+		{
+			strStatus = L"Skipped";
+			strProgress = L"N/A";
+		}
+		
 	}
+	else if (pinfo->uSendSize > 0)
+	{
+		strProgress.Format(L"%.2f%%", (double)pinfo->uSendSize * 100 / pinfo->uFileSize);
+	}
+	
+
+	if (!strStatus.IsEmpty())
+	{
+		SetItemText(pinfo->dwItemID, E_STATUS, strStatus);
+	}
+	if (!strProgress.IsEmpty())
+	{
+		SetItemText(pinfo->dwItemID, E_PROGRESS, strProgress);
+	}
+
+	int iElapse = GetTickCount() - pinfo->dwBeginTime;
+	if (iElapse < 0)
+	{
+		iElapse = MAXDWORD - pinfo->dwBeginTime;
+	}
+	CStringW strTime;
+	DWORD dwTotalSec = iElapse / 1000;
+	WORD wHour = dwTotalSec / 3600;
+	WORD wMinute = dwTotalSec % 3600 / 60;
+	WORD wSecond = dwTotalSec % 60;
+	strTime.Format(L"%d:%02d:%02d", wHour, wMinute, wSecond);
+	SetItemText(pinfo->dwItemID, E_ELAPSE, strTime);
+
+	if (pinfo->bSelected)
+	{
+		CStringW strSpeed;
+		if (pinfo->uSendSize && dwTotalSec)
+		{
+			
+			double fSpeed = (double)pinfo->uSendSize / dwTotalSec;
+			if (fSpeed > 1024 * 1024)
+			{
+				strSpeed.Format(L"%.1fMB/S", fSpeed / (1024 * 1024));
+			}
+			else if (fSpeed > 1024)
+			{
+				strSpeed.Format(L"%.1fKB/S", fSpeed / 1024);
+			}
+			else
+			{
+				strSpeed.Format(L"%.1fB/S", fSpeed);
+			}
+			
+		}
+		else {
+			strSpeed = L"0B/S";
+		}
+		SetItemText(pinfo->dwItemID, E_SPEED, strSpeed);
+		
+	}
+	
 }
 
 BEGIN_MESSAGE_MAP(CFileList, CListCtrl)
@@ -97,8 +164,12 @@ void CFileList::AddFile(const CNetInstall::tagFileInfo *pinfo)
 	size_t nItem = GetItemCount();
 	strTmp.Format(L"%d", m_Innerid);
 	InsertItem(nItem, L"");
-	SetItemText(nItem, 1, strTmp);
-	SetItemText(nItem, 2, L"Pending");
+	SetItemText(nItem, E_ID, strTmp);
+	SetItemText(nItem, E_STATUS, L"Pending");
+	SetItemText(nItem, E_PROGRESS, L"N/A");
+	SetItemText(nItem, E_ELAPSE, L"0:00:00");
+	SetItemText(nItem, E_SPEED, L"N/A");
+
 	double uSizeUnit = (double)pinfo->uFileSize / 1024;
 	if (uSizeUnit > 1024 * 1024)
 	{
@@ -112,8 +183,9 @@ void CFileList::AddFile(const CNetInstall::tagFileInfo *pinfo)
 	{
 		strTmp.Format(L"%.2f KB", uSizeUnit + 0.005);
 	}
-	SetItemText(nItem, 3, strTmp);
-	SetItemText(nItem, 4, pinfo->strPath);
+
+	SetItemText(nItem, E_SIZE, strTmp);
+	SetItemText(nItem, E_PATH, pinfo->strPath);
 	SetCheck(nItem);
 	CNetInstall::tagFileInfo info = *pinfo;
 	info.dwItemID = m_Innerid;

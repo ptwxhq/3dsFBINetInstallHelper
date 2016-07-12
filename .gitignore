@@ -1,4 +1,5 @@
 *.suo
 Debug/
 Release/
-CiaInstall.vcxproj.user
+*.vcxproj.user
+*.aps

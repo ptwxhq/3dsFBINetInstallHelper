@@ -5,17 +5,24 @@
 class CNetInstall
 {
 public:
+	enum {
+		ERR_NOSET,
+		ERR_FAIL,
+	};
+
 	struct tagFileInfo {
 		bool bSelected;
 		DWORD dwItemID;
 		DWORD dwError;
-//		DWORD dwBeginTime;
+		DWORD dwBeginTime;
 //		DWORD dwStopTime;
 		UINT64 uFileSize;
+		UINT64 uSendSize;
 		CStringW strPath;
 		tagFileInfo() {
 			bSelected = true;
 			uFileSize = 0;
+			uSendSize = 0;
 			dwError = 0;
 		}
 	};
@@ -23,12 +30,12 @@ public:
 
 	BOOL SetBufferSize(DWORD dwSize);
 	static DWORD GetLocalIP();
-	BOOL Connect(LPCWSTR lpszAddr, WORD wPort = 5000);
+	BOOL Connect(LPCWSTR lpszAddr, WORD wVerType = MAKEWORD(2, 0), WORD wPort = 5000);
 	BOOL StopConn();
 	BOOL DisConnect();
 	static BOOL CheckFile(LPCWSTR lpszPath, tagFileInfo* pInfo = NULL);
-	void StartTask(const std::vector<tagFileInfo> *pVecInfo);
-	BOOL TransFile(const tagFileInfo* pInfo);
+	void StartTask(std::vector<tagFileInfo> *pVecInfo);
+	BOOL TransFile(tagFileInfo* pInfo);
 	
 	CNetInstall();
 	~CNetInstall();
@@ -39,6 +46,7 @@ protected:
 	BOOL SendData(LPBYTE lpData, DWORD dwLen);
 	BOOL RecvData(LPBYTE lpData, DWORD dwLen);
 	bool m_bInited;
+	WORD m_wFBIVer;
 	DWORD m_dwBufferSize;
 	SOCKET m_socket;
 	static UNITPROGRESS m_sProgressCallBack;
