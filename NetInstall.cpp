@@ -58,7 +58,7 @@ DWORD CNetInstall::GetLocalIP()
 
 BOOL CNetInstall::Connect(LPCWSTR lpszAddr, WORD wVerType /*= MAKEWORD(2, 0)*/, WORD wPort/* = 5000*/)
 {
-	m_wFBIVer = MAKEWORD(2, 0);
+	m_wFBIVer = wVerType;
 	if (!m_bInited)
 	{
 		WSAData wd;
